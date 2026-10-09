@@ -118,4 +118,66 @@ final class move_note_test extends \advanced_testcase {
             $this->assertSame('Course or activity not accessible. (Not enrolled)', $ex->getMessage());
         }
     }
+
+    #[\PHPUnit\Framework\Attributes\Group('baseline')]
+    /**
+     * Users can edit placement must not allow moving other users' notes or own notes on a read only board.
+     */
+    public function test_execute_userscanedit_denied(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+
+        /** @var \mod_board_generator $generator */
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_board');
+        $course = $this->getDataGenerator()->create_course();
+        $board = $this->getDataGenerator()->create_module('board', ['course' => $course->id, 'userscanedit' => 1]);
+        $student1 = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $student2 = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $columns = array_values($DB->get_records('board_columns', ['boardid' => $board->id], 'id ASC'));
+        $note = $generator->create_note(['columnid' => $columns[0]->id, 'userid' => $student1->id]);
+
+        $this->setUser($student2);
+        try {
+            move_note::execute($note->id, $columns[1]->id, 0);
+            $this->fail('Exception expected');
+        } catch (\core\exception\moodle_exception $ex) {
+            $this->assertInstanceOf(\core\exception\required_capability_exception::class, $ex);
+        }
+        $this->assertEquals($columns[0]->id, $DB->get_field('board_notes', 'columnid', ['id' => $note->id]));
+
+        $DB->set_field('board', 'postby', time() - 60, ['id' => $board->id]);
+        $this->setUser($student1);
+        try {
+            move_note::execute($note->id, $columns[1]->id, 0);
+            $this->fail('Exception expected');
+        } catch (\core\exception\moodle_exception $ex) {
+            $this->assertInstanceOf(\core\exception\invalid_parameter_exception::class, $ex);
+        }
+        $this->assertEquals($columns[0]->id, $DB->get_field('board_notes', 'columnid', ['id' => $note->id]));
+    }
+
+    #[\PHPUnit\Framework\Attributes\Group('baseline')]
+    /**
+     * Users can edit placement still allows moving own notes.
+     */
+    public function test_execute_userscanedit_own_note(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+
+        /** @var \mod_board_generator $generator */
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_board');
+        $course = $this->getDataGenerator()->create_course();
+        $board = $this->getDataGenerator()->create_module('board', ['course' => $course->id, 'userscanedit' => 1]);
+        $student1 = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $columns = array_values($DB->get_records('board_columns', ['boardid' => $board->id], 'id ASC'));
+        $note = $generator->create_note(['columnid' => $columns[0]->id, 'userid' => $student1->id]);
+
+        $this->setUser($student1);
+        $result = move_note::execute($note->id, $columns[1]->id, 0);
+        $result = move_note::clean_returnvalue(move_note::execute_returns(), $result);
+        $this->assertTrue($result['status']);
+        $this->assertEquals($columns[1]->id, $DB->get_field('board_notes', 'columnid', ['id' => $note->id]));
+    }
 }
