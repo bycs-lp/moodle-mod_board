@@ -70,6 +70,7 @@ final class move_column extends external_api {
 
         // Request and permission validation.
         $context = board::context_for_column($column);
+        self::validate_context($context);
         require_capability('mod/board:view', $context);
         require_capability('mod/board:manageboard', $context);
 

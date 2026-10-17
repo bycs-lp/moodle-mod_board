@@ -76,4 +76,65 @@ final class move_column_test extends \advanced_testcase {
             );
         }
     }
+
+    #[\PHPUnit\Framework\Attributes\Group('baseline')]
+    /**
+     * A category-level manageboard holder must not move columns in a course they cannot access.
+     */
+    public function test_execute_requires_course_access(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        [$user, $course, $column] = $this->setup_category_board_manager();
+
+        try {
+            move_column::execute($column->id, 1);
+            $this->fail('Exception expected');
+        } catch (\core\exception\moodle_exception $ex) {
+            $this->assertInstanceOf(\core\exception\require_login_exception::class, $ex);
+        }
+        $this->assertSame('4', $DB->get_field('board_columns', 'sortorder', ['id' => $column->id]));
+    }
+
+    #[\PHPUnit\Framework\Attributes\Group('baseline')]
+    /**
+     * A category-level manageboard holder with course access may move columns.
+     */
+    public function test_execute_with_category_role_and_course_access(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        [$user, $course, $column] = $this->setup_category_board_manager();
+        $this->getDataGenerator()->enrol_user($user->id, $course->id, 'student');
+
+        $result = move_column::execute($column->id, 1);
+        $result = move_column::clean_returnvalue(move_column::execute_returns(), $result);
+        $this->assertTrue($result['status']);
+        $this->assertSame('2', $DB->get_field('board_columns', 'sortorder', ['id' => $column->id]));
+    }
+
+    /**
+     * Create a board column and a user holding manageboard only through a category-level role.
+     *
+     * @return array [user, course, column]
+     */
+    private function setup_category_board_manager(): array {
+        /** @var \mod_board_generator $generator */
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_board');
+
+        $category = $this->getDataGenerator()->create_category();
+        $course = $this->getDataGenerator()->create_course(['category' => $category->id]);
+        $board = $this->getDataGenerator()->create_module('board', ['course' => $course->id]);
+        $column = $generator->create_column(['boardid' => $board->id, 'name' => 'Col X']);
+
+        $roleid = $this->getDataGenerator()->create_role();
+        $syscontext = \context_system::instance();
+        assign_capability('mod/board:view', CAP_ALLOW, $roleid, $syscontext->id);
+        assign_capability('mod/board:manageboard', CAP_ALLOW, $roleid, $syscontext->id);
+        $user = $this->getDataGenerator()->create_user();
+        role_assign($roleid, $user->id, \context_coursecat::instance($category->id)->id);
+
+        $this->setUser($user);
+        return [$user, $course, $column];
+    }
 }
