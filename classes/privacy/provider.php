@@ -592,7 +592,7 @@ class provider implements
         $columnids = $DB->get_fieldset_select(
             'board_columns',
             'id',
-            "boardid = :boardid)",
+            "boardid = :boardid",
             ['boardid' => $boardid]
         );
 
@@ -639,7 +639,7 @@ class provider implements
 
         // Delete all image files from the notes.
         $fs = get_file_storage();
-        $fs->delete_area_files($context->id, 'mod_board', 'images', $notesinsql, $notesinparams);
+        $fs->delete_area_files_select($context->id, 'mod_board', 'images', $notesinsql, $notesinparams);
     }
 
     /**
@@ -738,7 +738,7 @@ class provider implements
         $columnids = $DB->get_fieldset_select(
             'board_columns',
             'id',
-            "boardid = :boardid)",
+            "boardid = :boardid",
             ['boardid' => $board->id]
         );
 
